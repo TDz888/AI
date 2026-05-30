@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ultimate AI Chat</title>
     <style>
         :root {
@@ -11,7 +11,7 @@
             --bubble-user: #ff4d6a; --bubble-ai: #1c1c3a; --thinking-text: #ffb300;
         }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100dvh; display: flex; justify-content: center; align-items: center; }
         .app { width: 100%; max-width: 750px; height: 100dvh; background: var(--surface); display: flex; flex-direction: column; box-shadow: 0 0 60px rgba(0,0,0,.6); }
         .tabs { display: flex; background: var(--primary); border-bottom: 1px solid var(--border); }
         .tab { flex:1; padding:14px; text-align:center; font-weight:600; color:var(--text2); cursor:pointer; border-bottom:3px solid transparent; background:none; border:none; }
@@ -23,8 +23,7 @@
         .btn-icon { width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:var(--input-bg); color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer; }
         .btn-icon:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
         .btn-sm { padding:7px 14px; border-radius:20px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); font-weight:600; font-size:.8rem; cursor:pointer; }
-        .btn-sm:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
-        .chat-messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth; contain:content; }
+        .chat-messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth; }
         .chat-messages::-webkit-scrollbar { width:5px; }
         .chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
         .msg { max-width:85%; padding:10px 14px; border-radius:16px; line-height:1.5; word-wrap:break-word; white-space:pre-wrap; font-size:.92rem; animation:fadeUp .3s; }
@@ -38,13 +37,11 @@
         .thinking-container.open .thinking-content { display:block; }
         pre { background:#090915; padding:14px; border-radius:12px; overflow-x:auto; margin:10px 0; border:1px solid rgba(255,255,255,.08); }
         code { font-family: Consolas, monospace; font-size:.85rem; }
-        p code { background:rgba(255,255,255,.08); padding:2px 6px; border-radius:6px; color:var(--accent); }
         .chat-input { padding:10px 12px; background:var(--primary); display:flex; gap:8px; border-top:1px solid var(--border); }
         .chat-input input { flex:1; padding:12px 16px; border-radius:24px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none; font-size:.92rem; }
-        .chat-input input:focus { border-color:var(--accent); }
         .send-btn { width:44px; height:44px; border-radius:50%; border:none; background:var(--accent); color:#fff; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; }
         .send-btn:disabled { opacity:.5; cursor:default; }
-        /* TTS Panel */
+        /* TTS */
         .tts-container { padding:20px; display:flex; flex-direction:column; gap:14px; align-items:center; overflow-y:auto; }
         .tts-container select,.tts-container textarea { width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); outline:none; }
         .tts-container textarea { min-height:100px; resize:vertical; }
@@ -52,7 +49,6 @@
         .tts-btn:disabled { opacity:.5; }
         .audio-box { width:100%; display:flex; flex-direction:column; gap:8px; align-items:center; }
         .audio-box audio { width:100%; }
-        .download-link { color:var(--accent); text-decoration:none; font-size:.9rem; }
         /* Modal */
         .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; justify-content:center; align-items:center; z-index:100; }
         .modal.show { display:flex; }
@@ -95,18 +91,18 @@
 <div class="modal" id="settingsModal">
     <div class="modal-content">
         <h3>API Key</h3>
-        <input type="text" id="apiKeyInput" placeholder="Nhập API Key (tuỳ chọn)">
+        <input type="text" id="apiKeyInput" placeholder="API Key (tuỳ chọn)">
         <button id="saveApiKeyBtn">Lưu</button>
     </div>
 </div>
 
 <script>
-// ─────────────── GLOBALS ───────────────
+// ─────────── GLOBALS ───────────
 let isStreaming = false, streamAbort = null, apiKey = localStorage.getItem('apiKey')||'';
 const chatBox = document.getElementById('chatMessages'), userInput = document.getElementById('userInput');
-let chatHistory = []; // Multi‑turn memory
+let chatHistory = [];
 
-// ─────────────── TABS & MODAL ───────────────
+// ─────────── TABS & MODAL ───────────
 document.querySelectorAll('.tab').forEach(t=>{
     t.addEventListener('click',()=>{
         document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -125,7 +121,7 @@ document.getElementById('saveApiKeyBtn').addEventListener('click',()=>{
 });
 modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('show');});
 
-// ─────────────── LOAD MODELS ───────────────
+// ─────────── LOAD MODELS ───────────
 async function loadModels(){
     try{
         const res=await fetch('/api/models');
@@ -150,7 +146,7 @@ async function loadModels(){
     }catch(e){console.error(e);}
 }
 
-// ─────────────── HELPER ───────────────
+// ─────────── HELPERS ───────────
 function escapeHtml(t){const m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'};return t.replace(/[&<>"']/g,c=>m[c]);}
 function parseMarkdown(t){
     let html = escapeHtml(t);
@@ -160,7 +156,7 @@ function parseMarkdown(t){
     return html;
 }
 
-// ─────────────── TTS BUTTON ON MESSAGES ───────────────
+// ─────────── TTS on message ───────────
 async function speakText(text, btn){
     btn.textContent='⏳...'; btn.disabled=true;
     const ttsModel = document.getElementById('ttsModelSelect').value || 'vi-VN-NamMinhNeural';
@@ -179,7 +175,7 @@ async function speakText(text, btn){
     }
 }
 
-// ─────────────── STREAMING CHAT ───────────────
+// ─────────── STREAMING CHAT ───────────
 function addMessage(role, text, usage=null, thinking=''){
     const div=document.createElement('div');
     div.className='msg '+(role==='user'?'user':'ai');
@@ -246,7 +242,7 @@ async function sendMessage(){
             buffer+=decoder.decode(value,{stream:true});
             const lines=buffer.split('\n'); buffer=lines.pop()||'';
             for(const line of lines){
-                if(line.startsWith(':')) continue; // keep‑alive comment
+                if(line.startsWith(':')) continue;
                 if(!line.startsWith('data: ')) continue;
                 const payload=line.slice(6);
                 if(payload==='[DONE]') continue;
@@ -281,7 +277,7 @@ document.getElementById('clearBtn').addEventListener('click',()=>{
     if(confirm('Xoá lịch sử?')){chatBox.innerHTML=''; chatHistory=[];}
 });
 
-// ─────────────── TTS ───────────────
+// ─────────── TTS ───────────
 let ttsLoading=false;
 document.getElementById('ttsGenerateBtn').addEventListener('click',async()=>{
     if(ttsLoading) return;
