@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """
-Ultimate AI Chat Web – Flask Backend v2.1
-Hỗ trợ API key động (từ request), nhiều model, chat & TTS.
+Ultimate AI Chat Web – Flask Backend v3.0
+Hỗ trợ streaming (Server-Sent Events), API key động, lỗi rõ ràng.
 """
 
 import os, json
-from flask import Flask, request, jsonify, send_from_directory, Response
+from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
 import requests
 
 app = Flask(__name__, static_folder='.')
 CORS(app)
 
-# ==================== CẤU HÌNH ====================
+# Cấu hình
 DEFAULT_API_KEY = os.environ.get("API_KEY",
     "sk-e317a237354192e26f99951f06e4882779e8a0e08e86d2f71242e8ff770bdf24")
 BASE_URL = "https://ckey.vn/v1/chat/completions"
 TTS_URL = "https://ckey.vn/v1/audio/speech"
 
-# ==================== MODELS ====================
 MODELS = [
     # Text models
     {"name": "chieustudio/deepseek-r1", "type": "text", "tier": "FREE", "desc": "DeepSeek R1"},
@@ -52,7 +51,6 @@ MODELS = [
     {"name": "google-tts/vi", "type": "tts", "tier": "FREE", "desc": "Google TTS", "voice": "alloy"},
 ]
 
-# ==================== ROUTES ====================
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -61,18 +59,25 @@ def index():
 def get_models():
     return jsonify(MODELS)
 
+def error_response(status, message):
+    response = jsonify({"error": message})
+    response.status_code = status
+    return response
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Thiếu dữ liệu JSON"}), 400
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        return error_response(400, "Dữ liệu JSON không hợp lệ")
 
-    # Lấy API key từ request hoặc dùng mặc định
     api_key = data.get("api_key") or DEFAULT_API_KEY
     model = data.get("model", "chieustudio/deepseek-r1")
     message = data.get("message", "")
+    stream = data.get("stream", False)  # Cho phép client yêu cầu streaming
+
     if not message:
-        return jsonify({"error": "Chưa nhập tin nhắn"}), 400
+        return error_response(400, "Thiếu nội dung tin nhắn")
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -82,46 +87,79 @@ def chat():
         "model": model,
         "messages": [{"role": "user", "content": message}],
         "temperature": 0.7,
-        "max_tokens": 2048
+        "max_tokens": 2048,
+        "stream": stream
     }
 
-    try:
-        resp = requests.post(BASE_URL, headers=headers, json=payload, timeout=120)
-        if resp.status_code != 200:
+    if stream:
+        def generate():
             try:
-                err = resp.json()
-            except:
-                err = resp.text
-            return jsonify({"error": f"API lỗi {resp.status_code}: {err}"}), resp.status_code
-        result = resp.json()
-        ai_response = result["choices"][0]["message"]["content"]
-        usage = result.get("usage", {})
-        return jsonify({
-            "response": ai_response,
-            "usage": {
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "total_tokens": usage.get("total_tokens", 0)
-            }
-        })
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Yêu cầu quá thời gian"}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+                resp = requests.post(BASE_URL, headers=headers, json=payload, stream=True, timeout=120)
+                if resp.status_code != 200:
+                    yield f"data: {json.dumps({'error': f'API lỗi {resp.status_code}'})}\n\n"
+                    return
+                for line in resp.iter_lines(decode_unicode=True):
+                    if line and line.startswith("data:"):
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            if "choices" in chunk:
+                                delta = chunk["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    # Gửi nội dung từng token
+                                    yield f"data: {json.dumps({'token': content})}\n\n"
+                            # Có thể gửi usage ở chunk cuối
+                        except json.JSONDecodeError:
+                            pass
+                yield "data: [DONE]\n\n"
+            except requests.exceptions.Timeout:
+                yield f"data: {json.dumps({'error': 'Yêu cầu quá thời gian'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    else:
+        try:
+            resp = requests.post(BASE_URL, headers=headers, json=payload, timeout=120)
+            if resp.status_code != 200:
+                try:
+                    err = resp.json()
+                except:
+                    err = resp.text
+                return error_response(resp.status_code, f"API lỗi: {err}")
+            result = resp.json()
+            ai_response = result["choices"][0]["message"]["content"]
+            usage = result.get("usage", {})
+            return jsonify({
+                "response": ai_response,
+                "usage": {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0)
+                }
+            })
+        except requests.exceptions.Timeout:
+            return error_response(504, "Yêu cầu quá thời gian")
+        except Exception as e:
+            return error_response(500, str(e))
 
 @app.route('/api/tts', methods=['POST'])
 def tts():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Thiếu dữ liệu JSON"}), 400
+    try:
+        data = request.get_json(force=True)
+    except:
+        return error_response(400, "Dữ liệu JSON không hợp lệ")
 
     api_key = data.get("api_key") or DEFAULT_API_KEY
     model = data.get("model", "vi-VN-NamMinhNeural")
     text = data.get("text", "")
     if not text:
-        return jsonify({"error": "Chưa nhập văn bản"}), 400
+        return error_response(400, "Thiếu văn bản")
 
-    voice = "NamMinh"  # default
+    voice = "NamMinh"
     for m in MODELS:
         if m["name"] == model and m["type"] == "tts":
             voice = m.get("voice", "NamMinh")
@@ -144,13 +182,13 @@ def tts():
                 err = resp.json()
             except:
                 err = resp.text
-            return jsonify({"error": f"TTS lỗi {resp.status_code}: {err}"}), resp.status_code
+            return error_response(resp.status_code, f"TTS lỗi: {err}")
         return Response(resp.content, mimetype="audio/mpeg",
                         headers={"Content-Disposition": "attachment; filename=speech.mp3"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return error_response(500, str(e))
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Server running at http://localhost:{port}")
+    print(f"🚀 Server ready at http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)
