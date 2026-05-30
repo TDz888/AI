@@ -6,39 +6,29 @@
     <title>Ultimate AI Chat</title>
     <style>
         :root {
-            --bg: #0b0b14;
-            --surface: #15152a;
-            --primary: #1e1e3c;
+            --bg: #0a0a14;
+            --surface: #13132a;
+            --primary: #1c1c3a;
             --accent: #ff4d6a;
-            --accent-hover: #e63e5a;
             --text: #e9e9f0;
-            --text-secondary: #9d9db5;
+            --text2: #9d9db5;
             --border: #2a2a45;
-            --input-bg: #1e1e38;
+            --input-bg: #1c1c38;
             --bubble-user: #ff4d6a;
-            --bubble-ai: #1e1e3c;
+            --bubble-ai: #1c1c3a;
             --radius: 16px;
             --radius-sm: 10px;
-            --transition: 0.2s ease;
         }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin:0; padding:0; box-sizing:border-box; }
         body {
-            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             background: var(--bg);
             color: var(--text);
             height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
         }
-
         .app {
             width: 100%;
             max-width: 750px;
@@ -47,71 +37,56 @@
             display: flex;
             flex-direction: column;
             box-shadow: 0 0 60px rgba(0,0,0,0.6);
-            position: relative;
         }
-
         /* Tabs */
         .tabs {
             display: flex;
             background: var(--primary);
             border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
         }
-        .tab-btn {
+        .tab {
             flex: 1;
             padding: 14px;
             text-align: center;
             font-weight: 600;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
+            color: var(--text2);
             cursor: pointer;
             border-bottom: 3px solid transparent;
-            transition: all var(--transition);
+            transition: 0.2s;
             background: none;
             border: none;
             outline: none;
         }
-        .tab-btn.active {
+        .tab.active {
             color: var(--accent);
             border-bottom-color: var(--accent);
         }
-
         .panel {
             display: none;
             flex: 1;
             flex-direction: column;
             overflow: hidden;
         }
-        .panel.active {
-            display: flex;
-        }
+        .panel.active { display: flex; }
 
-        /* Chat panel */
+        /* Chat */
         .chat-header {
             padding: 10px 14px;
             background: var(--primary);
             display: flex;
-            align-items: center;
             gap: 8px;
+            align-items: center;
             border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
-            flex-wrap: wrap;
         }
         .chat-header select {
             flex: 1;
-            min-width: 140px;
             padding: 9px 14px;
             border-radius: 24px;
             border: 1px solid var(--border);
             background: var(--input-bg);
             color: var(--text);
-            font-size: 0.85rem;
             outline: none;
-            cursor: pointer;
-            transition: border var(--transition);
-        }
-        .chat-header select:focus {
-            border-color: var(--accent);
+            font-size: 0.85rem;
         }
         .btn-icon {
             width: 38px;
@@ -125,13 +100,8 @@
             justify-content: center;
             cursor: pointer;
             font-size: 1rem;
-            transition: all var(--transition);
         }
-        .btn-icon:hover {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: white;
-        }
+        .btn-icon:hover { background: var(--accent); color: white; border-color: var(--accent); }
         .btn-sm {
             padding: 8px 16px;
             border-radius: 20px;
@@ -141,14 +111,9 @@
             font-weight: 600;
             font-size: 0.8rem;
             cursor: pointer;
-            transition: all var(--transition);
             white-space: nowrap;
         }
-        .btn-sm:hover {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: white;
-        }
+        .btn-sm:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
         .chat-messages {
             flex: 1;
@@ -158,11 +123,8 @@
             flex-direction: column;
             gap: 12px;
             scroll-behavior: smooth;
-            contain: strict;
-            content-visibility: auto;
         }
         .chat-messages::-webkit-scrollbar { width: 5px; }
-        .chat-messages::-webkit-scrollbar-track { background: transparent; }
         .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
         .message {
@@ -174,72 +136,31 @@
             white-space: pre-wrap;
             font-size: 0.92rem;
             animation: fadeUp 0.25s ease;
-            position: relative;
         }
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .user-msg {
-            align-self: flex-end;
-            background: var(--bubble-user);
-            border-bottom-right-radius: var(--radius-sm);
-            color: #fff;
-        }
-        .ai-msg {
-            align-self: flex-start;
-            background: var(--bubble-ai);
-            border-bottom-left-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-        }
-        .msg-meta {
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-            margin-top: 4px;
-            display: flex;
-            justify-content: space-between;
-            opacity: 0.8;
-        }
-        .loading-dots {
-            display: flex;
-            gap: 5px;
-            padding: 12px 16px;
-        }
-        .loading-dots span {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--text-secondary);
-            animation: bounce 1.4s infinite both;
-        }
-        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
-        }
+        .user-msg { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: var(--radius-sm); color: #fff; }
+        .ai-msg { align-self: flex-start; background: var(--bubble-ai); border-bottom-left-radius: var(--radius-sm); border: 1px solid var(--border); }
+        .msg-meta { font-size: 0.65rem; color: var(--text2); margin-top: 4px; display: flex; justify-content: space-between; }
 
-        .chat-input-area {
+        .chat-input {
             padding: 12px 14px;
             background: var(--primary);
             display: flex;
             gap: 8px;
             border-top: 1px solid var(--border);
-            flex-shrink: 0;
         }
-        .chat-input-area input {
+        .chat-input input {
             flex: 1;
             padding: 12px 16px;
             border-radius: 28px;
             border: 1px solid var(--border);
             background: var(--input-bg);
             color: var(--text);
-            font-size: 0.92rem;
             outline: none;
-            transition: border var(--transition);
-        }
-        .chat-input-area input:focus {
-            border-color: var(--accent);
+            font-size: 0.92rem;
         }
         .send-btn {
             width: 46px;
@@ -253,12 +174,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background var(--transition), transform 0.1s;
         }
-        .send-btn:active { transform: scale(0.95); }
         .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* TTS Panel */
+        /* TTS */
         .tts-container {
             padding: 24px;
             display: flex;
@@ -267,26 +186,18 @@
             align-items: center;
             overflow-y: auto;
         }
-        .tts-container h2 {
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: var(--text);
-        }
-        .tts-container select,
-        .tts-container textarea {
+        .tts-container h2 { font-size: 1.3rem; }
+        .tts-container select, .tts-container textarea {
             width: 100%;
-            padding: 12px 14px;
-            border-radius: var(--radius-sm);
+            padding: 12px;
+            border-radius: 10px;
             border: 1px solid var(--border);
             background: var(--input-bg);
             color: var(--text);
-            font-size: 0.9rem;
             outline: none;
             resize: vertical;
         }
-        .tts-container textarea {
-            min-height: 120px;
-        }
+        .tts-container textarea { min-height: 120px; }
         .tts-btn {
             background: var(--accent);
             color: white;
@@ -294,31 +205,15 @@
             padding: 12px 28px;
             border-radius: 24px;
             font-weight: 600;
-            font-size: 1rem;
             cursor: pointer;
-            transition: background var(--transition);
         }
-        .tts-btn:hover { background: var(--accent-hover); }
         .tts-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .audio-container {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: center;
-        }
-        .audio-container audio {
-            width: 100%;
-        }
-        .download-link {
-            color: var(--accent);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
+        .audio-box { width: 100%; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .audio-box audio { width: 100%; }
+        .download-link { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
 
-        /* Settings modal nhỏ */
-        .settings-overlay {
+        /* Modal */
+        .modal {
             position: fixed;
             inset: 0;
             background: rgba(0,0,0,0.7);
@@ -327,18 +222,18 @@
             align-items: center;
             z-index: 100;
         }
-        .settings-overlay.show { display: flex; }
-        .settings-box {
+        .modal.show { display: flex; }
+        .modal-content {
             background: var(--surface);
-            border-radius: 16px;
             padding: 24px;
+            border-radius: 16px;
             width: 90%;
             max-width: 400px;
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        .settings-box input {
+        .modal-content input {
             padding: 10px 14px;
             border-radius: 10px;
             border: 1px solid var(--border);
@@ -346,7 +241,7 @@
             color: var(--text);
             outline: none;
         }
-        .settings-box button {
+        .modal-content button {
             padding: 10px;
             border-radius: 10px;
             border: none;
@@ -355,47 +250,39 @@
             font-weight: 600;
             cursor: pointer;
         }
-
-        @media (max-width: 600px) {
-            .app { max-width: 100%; }
-            .chat-header { padding: 8px 10px; }
-            .chat-input-area { padding: 8px 10px; }
-        }
     </style>
 </head>
 <body>
 <div class="app">
     <div class="tabs">
-        <button class="tab-btn active" data-tab="chat">💬 Chat</button>
-        <button class="tab-btn" data-tab="tts">🔊 TTS</button>
+        <button class="tab active" data-tab="chat">💬 Chat</button>
+        <button class="tab" data-tab="tts">🔊 TTS</button>
     </div>
 
-    <!-- CHAT PANEL -->
+    <!-- Chat Panel -->
     <div class="panel active" id="panel-chat">
         <div class="chat-header">
             <select id="modelSelect"></select>
-            <button class="btn-icon" id="clearBtn" title="Xóa lịch sử">🗑️</button>
-            <button class="btn-sm" id="settingsBtn">⚙️ API Key</button>
+            <button class="btn-icon" id="clearBtn" title="Xóa">🗑️</button>
+            <button class="btn-sm" id="settingsBtn">⚙️ API</button>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div style="text-align:center;color:var(--text-secondary);margin-top:40px;">
-                🤖 Chọn model và bắt đầu trò chuyện
-            </div>
+            <div style="text-align:center;color:var(--text2);margin-top:40px;">🤖 Chọn model và bắt đầu trò chuyện</div>
         </div>
-        <div class="chat-input-area">
+        <div class="chat-input">
             <input type="text" id="userInput" placeholder="Nhập tin nhắn..." autofocus>
             <button class="send-btn" id="sendBtn">➤</button>
         </div>
     </div>
 
-    <!-- TTS PANEL -->
+    <!-- TTS Panel -->
     <div class="panel" id="panel-tts">
         <div class="tts-container">
             <h2>🔊 Chuyển văn bản thành giọng nói</h2>
             <select id="ttsModelSelect"></select>
             <textarea id="ttsText" placeholder="Nhập văn bản..."></textarea>
             <button class="tts-btn" id="ttsGenerateBtn">🎤 Tạo giọng nói</button>
-            <div class="audio-container" id="ttsAudioContainer" style="display:none;">
+            <div class="audio-box" id="ttsAudioContainer" style="display:none;">
                 <audio controls id="ttsAudio"></audio>
                 <a class="download-link" id="ttsDownload" href="#" download="speech.mp3">📥 Tải file MP3</a>
             </div>
@@ -403,144 +290,109 @@
     </div>
 </div>
 
-<!-- Settings Modal -->
-<div class="settings-overlay" id="settingsOverlay">
-    <div class="settings-box">
+<!-- Modal API Key -->
+<div class="modal" id="settingsModal">
+    <div class="modal-content">
         <h3 style="color:var(--text);">Cài đặt API Key</h3>
-        <input type="text" id="apiKeyInput" placeholder="Nhập API Key (để trống để dùng mặc định)">
-        <button id="saveSettingsBtn">Lưu</button>
+        <input type="text" id="apiKeyInput" placeholder="API Key (để trống dùng mặc định)">
+        <button id="saveApiKeyBtn">Lưu</button>
     </div>
 </div>
 
 <script>
-// ==================== GLOBAL STATE ====================
-const MAX_MESSAGES = 200;
-let messageCount = 0;
-let isLoadingChat = false;
-let isLoadingTTS = false;
-let currentAudioBlob = null;
+// ==================== GLOBAL ====================
+let isStreaming = false;
+let currentStreamAbort = null;
 let apiKey = localStorage.getItem('apiKey') || '';
 
-// ==================== TABS ====================
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+// Tabs
+document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+        t.classList.add('active');
+        document.getElementById('panel-'+t.dataset.tab).classList.add('active');
     });
 });
 
-// ==================== SETTINGS ====================
-const settingsOverlay = document.getElementById('settingsOverlay');
+// Settings modal
+const modal = document.getElementById('settingsModal');
 document.getElementById('settingsBtn').addEventListener('click', () => {
     document.getElementById('apiKeyInput').value = apiKey;
-    settingsOverlay.classList.add('show');
+    modal.classList.add('show');
 });
-document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
     apiKey = document.getElementById('apiKeyInput').value.trim();
     localStorage.setItem('apiKey', apiKey);
-    settingsOverlay.classList.remove('show');
+    modal.classList.remove('show');
 });
-settingsOverlay.addEventListener('click', (e) => {
-    if (e.target === settingsOverlay) settingsOverlay.classList.remove('show');
-});
+modal.addEventListener('click', e => { if(e.target===modal) modal.classList.remove('show'); });
 
-// ==================== MODEL LOADING ====================
+// Load models
 async function loadModels() {
     try {
-        const resp = await fetch('/api/models');
-        const models = await resp.json();
-        const chatSelect = document.getElementById('modelSelect');
-        const ttsSelect = document.getElementById('ttsModelSelect');
-
-        // Group text models by tier
-        const textModels = models.filter(m => m.type === 'text');
-        const freeModels = textModels.filter(m => m.tier === 'FREE');
-        const paidModels = textModels.filter(m => m.tier === 'PAID');
-
-        function addGroup(select, label, models) {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = label;
-            models.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.name;
-                opt.textContent = `${m.tier === 'FREE' ? '🆓' : '💰'} ${m.name} - ${m.desc}`;
-                optgroup.appendChild(opt);
+        const res = await fetch('/api/models');
+        const models = await res.json();
+        const chatSel = document.getElementById('modelSelect');
+        const ttsSel = document.getElementById('ttsModelSelect');
+        const textModels = models.filter(m => m.type==='text');
+        const free = textModels.filter(m => m.tier==='FREE');
+        const paid = textModels.filter(m => m.tier==='PAID');
+        function addGroup(sel, label, arr) {
+            const g = document.createElement('optgroup');
+            g.label = label;
+            arr.forEach(m => {
+                const o = document.createElement('option');
+                o.value = m.name;
+                o.textContent = `${m.tier==='FREE'?'🆓':'💰'} ${m.name} - ${m.desc}`;
+                g.appendChild(o);
             });
-            select.appendChild(optgroup);
+            sel.appendChild(g);
         }
-
-        addGroup(chatSelect, 'Miễn phí (FREE)', freeModels);
-        addGroup(chatSelect, 'Trả phí (PAID)', paidModels);
-
-        // Restore saved chat model
+        addGroup(chatSel, 'Miễn phí', free);
+        addGroup(chatSel, 'Trả phí', paid);
         const savedChat = localStorage.getItem('chatModel');
-        if (savedChat) chatSelect.value = savedChat;
-        chatSelect.addEventListener('change', () => localStorage.setItem('chatModel', chatSelect.value));
+        if(savedChat) chatSel.value = savedChat;
+        chatSel.addEventListener('change', () => localStorage.setItem('chatModel', chatSel.value));
 
-        // TTS models
-        const ttsModels = models.filter(m => m.type === 'tts');
-        ttsModels.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.name;
-            opt.textContent = m.desc;
-            ttsSelect.appendChild(opt);
+        models.filter(m => m.type==='tts').forEach(m => {
+            const o = document.createElement('option');
+            o.value = m.name;
+            o.textContent = m.desc;
+            ttsSel.appendChild(o);
         });
         const savedTTS = localStorage.getItem('ttsModel');
-        if (savedTTS) ttsSelect.value = savedTTS;
-        ttsSelect.addEventListener('change', () => localStorage.setItem('ttsModel', ttsSelect.value));
-    } catch(e) {
-        console.error('Lỗi tải models:', e);
-    }
+        if(savedTTS) ttsSel.value = savedTTS;
+        ttsSel.addEventListener('change', () => localStorage.setItem('ttsModel', ttsSel.value));
+    } catch(e) { console.error(e); }
 }
 
-// ==================== CHAT ====================
-function addMessage(role, content, usage = null) {
-    const container = document.getElementById('chatMessages');
-    if (messageCount === 0) container.innerHTML = '';
+// ==================== CHAT (streaming) ====================
+const chatBox = document.getElementById('chatMessages');
+function addMessage(role, content, usage) {
+    if(!chatBox.querySelector('.msg-placeholder') && chatBox.children.length===0) chatBox.innerHTML='';
     const div = document.createElement('div');
-    div.className = `message ${role === 'user' ? 'user-msg' : 'ai-msg'}`;
+    div.className = `message ${role==='user'?'user-msg':'ai-msg'}`;
     let html = escapeHtml(content);
-    // Xử lý markdown cơ bản
     html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
     html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.3);padding:8px;border-radius:8px;overflow-x:auto;"><code>$2</code></pre>');
     html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">$1</code>');
     div.innerHTML = html;
-    if (usage && role === 'ai') {
+    if(usage) {
         const meta = document.createElement('div');
         meta.className = 'msg-meta';
-        meta.innerHTML = `<span>🤖 AI</span><span>📊 ${usage.total_tokens || 0} tokens</span>`;
+        meta.innerHTML = `<span>🤖 AI</span><span>📊 ${usage.total_tokens||0} tokens</span>`;
         div.appendChild(meta);
-    } else if (role === 'user') {
+    } else if(role==='user') {
         const meta = document.createElement('div');
         meta.className = 'msg-meta';
         meta.innerHTML = '<span>👤 Bạn</span>';
         div.appendChild(meta);
     }
-    container.appendChild(div);
-    messageCount++;
-    // Giới hạn DOM
-    while (container.children.length > MAX_MESSAGES) {
-        container.removeChild(container.firstChild);
-        messageCount--;
-    }
-    requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; });
-}
-
-function addLoadingIndicator() {
-    const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.className = 'loading-dots';
-    div.id = 'loadingIndicator';
-    div.innerHTML = '<span></span><span></span><span></span>';
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
-function removeLoadingIndicator() {
-    const el = document.getElementById('loadingIndicator');
-    if (el) el.remove();
+    chatBox.appendChild(div);
+    requestAnimationFrame(() => chatBox.scrollTop = chatBox.scrollHeight);
+    // Giới hạn 200 tin nhắn
+    while(chatBox.children.length > 200) chatBox.removeChild(chatBox.firstChild);
 }
 
 function escapeHtml(text) {
@@ -549,101 +401,135 @@ function escapeHtml(text) {
 }
 
 async function sendMessage() {
-    if (isLoadingChat) return;
+    if(isStreaming) return;
     const input = document.getElementById('userInput');
     const message = input.value.trim();
-    if (!message) return;
+    if(!message) return;
     const model = document.getElementById('modelSelect').value;
-    if (!model) { alert('Vui lòng chọn model!'); return; }
-
+    if(!model) { alert('Chọn model!'); return; }
     input.value = '';
-    isLoadingChat = true;
+    isStreaming = true;
     document.getElementById('sendBtn').disabled = true;
 
     addMessage('user', message);
-    addLoadingIndicator();
+
+    // Tạo phần tử AI trống để điền dần
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message ai-msg';
+    aiDiv.id = 'streamingMsg';
+    chatBox.appendChild(aiDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
 
     try {
+        const controller = new AbortController();
+        currentStreamAbort = controller;
         const resp = await fetch('/api/chat', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ model, message, api_key: apiKey || undefined })
+            body: JSON.stringify({ model, message, api_key: apiKey||undefined, stream: true }),
+            signal: controller.signal
         });
-        const data = await resp.json();
-        removeLoadingIndicator();
-        if (data.error) {
-            addMessage('ai', '❌ ' + data.error);
-        } else {
-            addMessage('ai', data.response, data.usage);
+        if(!resp.ok) {
+            const err = await resp.json().catch(() => ({error: 'Lỗi không xác định'}));
+            aiDiv.innerHTML = '❌ ' + (err.error || resp.status);
+            return;
         }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        while(true) {
+            const {done, value} = await reader.read();
+            if(done) break;
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            for(const line of lines) {
+                if(line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if(data === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(data);
+                        if(json.error) {
+                            aiDiv.innerHTML = '❌ ' + json.error;
+                            return;
+                        }
+                        if(json.token) {
+                            fullContent += json.token;
+                            aiDiv.innerHTML = escapeHtml(fullContent)
+                                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                                .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.3);padding:8px;border-radius:8px;overflow-x:auto;"><code>$2</code></pre>')
+                                .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">$1</code>');
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        }
+                        if(json.usage) {
+                            const meta = document.createElement('div');
+                            meta.className = 'msg-meta';
+                            meta.innerHTML = `<span>🤖 AI</span><span>📊 ${json.usage.total_tokens||0} tokens</span>`;
+                            aiDiv.appendChild(meta);
+                        }
+                    } catch(e) {}
+                }
+            }
+        }
+        aiDiv.removeAttribute('id');
     } catch(e) {
-        removeLoadingIndicator();
-        addMessage('ai', '❌ Lỗi kết nối: ' + e.message);
+        if(e.name !== 'AbortError') {
+            document.getElementById('streamingMsg')?.remove();
+            addMessage('ai', '❌ Lỗi kết nối: ' + e.message);
+        }
+    } finally {
+        isStreaming = false;
+        document.getElementById('sendBtn').disabled = false;
+        currentStreamAbort = null;
     }
-
-    isLoadingChat = false;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('userInput').focus();
 }
 
-// Enter to send
-document.getElementById('userInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-});
-
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
-
+document.getElementById('userInput').addEventListener('keydown', e => {
+    if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
 document.getElementById('clearBtn').addEventListener('click', () => {
-    if (confirm('Xóa toàn bộ lịch sử chat?')) {
-        document.getElementById('chatMessages').innerHTML = '<div style="text-align:center;color:var(--text-secondary);margin-top:40px;">🤖 Chọn model và bắt đầu trò chuyện</div>';
-        messageCount = 0;
+    if(confirm('Xóa lịch sử?')) {
+        chatBox.innerHTML = '<div style="text-align:center;color:var(--text2);margin-top:40px;">🤖 Chọn model và bắt đầu trò chuyện</div>';
     }
 });
 
 // ==================== TTS ====================
+let ttsLoading = false;
 document.getElementById('ttsGenerateBtn').addEventListener('click', async () => {
-    if (isLoadingTTS) return;
+    if(ttsLoading) return;
     const text = document.getElementById('ttsText').value.trim();
-    if (!text) { alert('Vui lòng nhập văn bản!'); return; }
+    if(!text) { alert('Nhập văn bản!'); return; }
     const model = document.getElementById('ttsModelSelect').value;
-    if (!model) { alert('Vui lòng chọn model TTS!'); return; }
-
-    isLoadingTTS = true;
+    if(!model) { alert('Chọn model TTS!'); return; }
+    ttsLoading = true;
     const btn = document.getElementById('ttsGenerateBtn');
     btn.textContent = '⏳ Đang tạo...';
     btn.disabled = true;
-
     try {
         const resp = await fetch('/api/tts', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ model, text, api_key: apiKey || undefined })
+            body: JSON.stringify({ model, text, api_key: apiKey||undefined })
         });
-        if (!resp.ok) {
-            const err = await resp.json();
-            alert('Lỗi: ' + (err.error || 'Không xác định'));
+        if(!resp.ok) {
+            const err = await resp.json().catch(() => ({error: 'Lỗi không xác định'}));
+            alert('Lỗi: ' + (err.error || resp.status));
             return;
         }
         const blob = await resp.blob();
-        currentAudioBlob = blob;
         const url = URL.createObjectURL(blob);
-        const audio = document.getElementById('ttsAudio');
-        audio.src = url;
+        document.getElementById('ttsAudio').src = url;
         document.getElementById('ttsAudioContainer').style.display = 'flex';
         document.getElementById('ttsDownload').href = url;
     } catch(e) {
-        alert('Lỗi kết nối: ' + e.message);
+        alert('Lỗi: ' + e.message);
     } finally {
-        isLoadingTTS = false;
+        ttsLoading = false;
         btn.textContent = '🎤 Tạo giọng nói';
         btn.disabled = false;
     }
 });
 
-// ==================== STARTUP ====================
 loadModels();
 </script>
 </body>
