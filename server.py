@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Ultimate AI Chat Web – Flask Backend (Production Ready)
-- Keep‑alive ping trong SSE để tránh 502
-- Hỗ trợ multi‑turn messages
-- Tích hợp TTS
+Ultimate AI Chat Web – Flask Backend (Safe Index)
+- Kiểm tra choices trước khi truy cập
+- Keep‑alive ping trong SSE
+- Multi‑turn chat, TTS
 """
 
 import os, json, time, logging
@@ -13,61 +13,38 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-# ───── Logging ─────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='.')
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app)
 
-# ───── Config ─────
 DEFAULT_API_KEY = os.environ.get("API_KEY", "sk-e317a237354192e26f99951f06e4882779e8a0e08e86d2f71242e8ff770bdf24")
 BASE_URL = os.environ.get("BASE_URL", "https://ckey.vn/v1/chat/completions")
 TTS_URL  = os.environ.get("TTS_URL", "https://ckey.vn/v1/audio/speech")
 
-# ───── HTTP Session với retry ─────
-retry_strategy = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
+retry_strategy = Retry(total=3, backoff_factor=0.5, status_forcelist=[500,502,503,504])
 adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=50, pool_maxsize=100)
 http = requests.Session()
 http.mount("https://", adapter)
 http.mount("http://", adapter)
 
-# ───── Models ─────
 MODELS = [
-    # Text FREE
     {"name": "chieustudio/deepseek-r1", "type": "text", "tier": "FREE", "desc": "DeepSeek R1"},
     {"name": "mistral-medium-3.5-128b", "type": "text", "tier": "FREE", "desc": "Mistral Medium 3.5"},
     {"name": "glm4.7", "type": "text", "tier": "FREE", "desc": "GLM 4.7"},
     {"name": "qwen3-coder-480b-a35b-instruct", "type": "text", "tier": "FREE", "desc": "Qwen3 Coder 480B"},
     {"name": "mistral-small-4-119b-2603", "type": "text", "tier": "FREE", "desc": "Mistral Small 4"},
-    {"name": "chieustudio/mistral-large-3-675b-instruct-2512", "type": "text", "tier": "FREE", "desc": "Mistral Large 3 675B"},
-    # Text PAID
     {"name": "deepseek-r1-distill-qwen-32b", "type": "text", "tier": "PAID", "desc": "DeepSeek R1 Distill"},
-    {"name": "deepseek-3.2", "type": "text", "tier": "PAID", "desc": "DeepSeek 3.2"},
-    {"name": "qwen3-coder-next", "type": "text", "tier": "PAID", "desc": "Qwen3 Coder Next"},
     {"name": "minimax-m2.5", "type": "text", "tier": "PAID", "desc": "Minimax M2.5"},
-    {"name": "minimax-m2.1", "type": "text", "tier": "PAID", "desc": "Minimax M2.1"},
-    {"name": "mistral-large-3-675b-instruct-2512", "type": "text", "tier": "PAID", "desc": "Mistral Large 3 675B"},
-    {"name": "deepseek-v4-flash", "type": "text", "tier": "PAID", "desc": "DeepSeek V4 Flash"},
-    {"name": "kimi-k2.5", "type": "text", "tier": "PAID", "desc": "Kimi K2.5"},
     {"name": "gpt-5.4-mini", "type": "text", "tier": "PAID", "desc": "GPT 5.4 Mini"},
-    {"name": "gpt-5.2", "type": "text", "tier": "PAID", "desc": "GPT 5.2"},
-    {"name": "gpt-5.3-codex", "type": "text", "tier": "PAID", "desc": "GPT 5.3 Codex"},
-    {"name": "gpt-5.4", "type": "text", "tier": "PAID", "desc": "GPT 5.4"},
     {"name": "gpt-5.5", "type": "text", "tier": "PAID", "desc": "GPT 5.5"},
-    {"name": "claude-haiku-4.5", "type": "text", "tier": "PAID", "desc": "Claude Haiku 4.5"},
     {"name": "claude-sonnet-4.6", "type": "text", "tier": "PAID", "desc": "Claude Sonnet 4.6"},
-    {"name": "claude-opus-4.6", "type": "text", "tier": "PAID", "desc": "Claude Opus 4.6"},
-    {"name": "glm-5", "type": "text", "tier": "PAID", "desc": "GLM-5"},
-    {"name": "glm-5.1", "type": "text", "tier": "PAID", "desc": "GLM-5.1"},
-    {"name": "kimi-k2.6", "type": "text", "tier": "PAID", "desc": "Kimi K2.6"},
-    # TTS FREE
     {"name": "vi-VN-NamMinhNeural", "type": "tts", "tier": "FREE", "desc": "Giọng nam VN", "voice": "NamMinh"},
     {"name": "vi-VN-HoaiMyNeural", "type": "tts", "tier": "FREE", "desc": "Giọng nữ VN", "voice": "HoaiMy"},
     {"name": "google-tts/vi", "type": "tts", "tier": "FREE", "desc": "Google TTS", "voice": "alloy"},
 ]
 
-# ───── Routes ─────
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -85,7 +62,6 @@ def chat():
     temperature = data.get("temperature", 0.7)
     max_tokens = data.get("max_tokens", 4096)
 
-    # Hỗ trợ cả message đơn lẻ và messages (multi‑turn)
     messages = data.get("messages")
     if not messages:
         msg = data.get("message", "")
@@ -114,7 +90,8 @@ def chat():
                             break
                         try:
                             chunk = json.loads(data_str)
-                            if "choices" in chunk:
+                            # 🔒 Kiểm tra choices an toàn
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
                                 delta = chunk["choices"][0].get("delta", {})
                                 content = delta.get("content", "")
                                 reasoning = delta.get("reasoning_content", "") or delta.get("reasoning", "")
@@ -125,7 +102,6 @@ def chat():
                                     yield f"data: {json.dumps(out, ensure_ascii=False)}\n\n"
                         except json.JSONDecodeError:
                             pass
-                    # 🔥 Keep‑alive mỗi 15 giây để tránh tunnel timeout
                     if time.time() - last_ping > 15:
                         yield ": keepalive\n\n"
                         last_ping = time.time()
@@ -140,6 +116,9 @@ def chat():
             if resp.status_code != 200:
                 return jsonify({"error": {"message": f"API error {resp.status_code}"}}), resp.status_code
             result = resp.json()
+            # 🔒 Kiểm tra choices an toàn
+            if "choices" not in result or len(result["choices"]) == 0:
+                return jsonify({"error": {"message": "API returned empty choices"}}), 502
             ai_resp = result["choices"][0]["message"]["content"]
             reasoning = result["choices"][0]["message"].get("reasoning_content", "")
             usage = result.get("usage", {})
