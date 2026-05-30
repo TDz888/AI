@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultimate AI Chat</title>
+<style>
+:root {
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --primary: #16213e;
+  --accent: #e94560;
+  --accent2: #0f3460;
+  --text: #eaeaea;
+  --text2: #a0a0b0;
+  --input-bg: #16213e;
+  --bubble-user: #e94560;
+  --bubble-ai: #1a1a3e;
+  --border: #2a2a4a;
+  --radius: 18px;
+  --font: system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh; display: flex; justify-content: center; align-items: center;
+}
+.chat-container {
+  width: 100%; max-width: 700px; height: 100vh;
+  background: var(--surface);
+  display: flex; flex-direction: column;
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
+/* Tabs */
+.tabs {
+  display: flex; background: var(--primary); border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1; padding: 12px; text-align: center; cursor: pointer;
+  font-weight: 600; font-size: 0.9rem; color: var(--text2);
+  border-bottom: 3px solid transparent; transition: all 0.2s;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* Panels */
+.panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.panel.active { display: flex; }
+/* Chat panel elements */
+.chat-header {
+  padding: 8px 12px; background: var(--primary);
+  display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border);
+}
+.chat-header select {
+  flex: 1; padding: 8px 12px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--input-bg);
+  color: var(--text); font-size: 0.85rem; outline: none;
+}
+.chat-header button {
+  background: var(--accent); color: white; border: none;
+  padding: 6px 12px; border-radius: 20px; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; transition: opacity 0.2s;
+}
+.chat-header button:hover { opacity: 0.8; }
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  scroll-behavior: smooth;
+  contain: strict;
+  content-visibility: auto;
+}
+.chat-messages::-webkit-scrollbar { width: 5px; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.message {
+  max-width: 85%; padding: 8px 12px; border-radius: var(--radius);
+  line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;
+  font-size: 0.9rem; animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.user-msg { align-self: flex-end; background: var(--bubble-user); border-bottom-right-radius: 6px; color: #fff; }
+.ai-msg { align-self: flex-start; background: var(--bubble-ai); border-bottom-left-radius: 6px; color: var(--text); border: 1px solid var(--border); }
+.msg-meta { font-size: 0.65rem; color: var(--text2); margin-top: 4px; display: flex; justify-content: space-between; }
+.chat-input {
+  padding: 10px 12px; background: var(--primary);
+  display: flex; gap: 8px; border-top: 1px solid var(--border);
+}
+.chat-input input {
+  flex: 1; padding: 10px 14px; border-radius: 24px;
+  border: 1px solid var(--border); background: var(--input-bg);
+  color: var(--text); font-size: 0.9rem; outline: none;
+}
+.chat-input input:focus { border-color: var(--accent); }
+.chat-input button {
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: var(--accent); color: #fff; cursor: pointer;
+  font-size: 1.2rem; transition: all 0.2s; display: flex;
+  align-items: center; justify-content: center;
+}
+.chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+.chat-input button:hover:not(:disabled) { background: #c0392b; transform: scale(1.05); }
+/* Loading dots */
+.loading { display: flex; gap: 4px; padding: 10px 14px; }
+.loading span { width: 8px; height: 8px; border-radius: 50%; background: var(--text2); animation: bounce 1.4s infinite both; }
+.loading span:nth-child(2) { animation-delay: 0.2s; }
+.loading span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,80%,100% { transform:scale(0); } 40% { transform:scale(1); } }
+/* TTS panel */
+.tts-container {
+  padding: 20px; display: flex; flex-direction: column; gap: 16px; align-items: center;
+}
+.tts-container select, .tts-container textarea {
+  width: 100%; padding: 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--input-bg);
+  color: var(--text); font-size: 0.9rem; outline: none;
+}
+.tts-container textarea { height: 120px; resize: vertical; }
+.tts-container button {
+  background: var(--accent); color: white; border: none;
+  padding: 12px 24px; border-radius: 24px; cursor: pointer;
+  font-weight: 600; font-size: 1rem; transition: opacity 0.2s;
+}
+.tts-container button:hover { opacity: 0.8; }
+.tts-container audio { width: 100%; margin-top: 8px; }
+.tts-container a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+@media (max-width: 600px) {
+  .chat-container { max-width:100%; height:100vh; }
+}
+</style>
+</head>
+<body>
+
+<div class="chat-container">
+  <div class="tabs">
+    <div class="tab-btn active" data-tab="chat">💬 Chat</div>
+    <div class="tab-btn" data-tab="tts">🔊 TTS</div>
+  </div>
+
+  <!-- CHAT PANEL -->
+  <div class="panel active" id="panel-chat">
+    <div class="chat-header">
+      <select id="chatModelSelect" title="Chọn model chat"></select>
+      <button onclick="clearChat()" title="Xóa lịch sử">🗑️</button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div style="text-align:center;color:var(--text2);margin-top:40px;">🤖 Chọn model và bắt đầu chat</div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="userInput" placeholder="Nhập tin nhắn..." autofocus>
+      <button id="sendBtn" onclick="sendMessage()">➤</button>
+    </div>
+  </div>
+
+  <!-- TTS PANEL -->
+  <div class="panel" id="panel-tts">
+    <div class="tts-container">
+      <h3>Chuyển văn bản thành giọng nói</h3>
+      <select id="ttsModelSelect"></select>
+      <textarea id="ttsText" placeholder="Nhập văn bản cần đọc..."></textarea>
+      <button id="ttsGenerateBtn" onclick="generateSpeech()">🔊 Tạo giọng nói</button>
+      <div id="ttsAudioContainer" style="display:none; width:100%;">
+        <audio controls id="ttsAudio"></audio>
+        <a id="ttsDownload" href="#" download="speech.mp3">📥 Tải file MP3</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== GLOBAL STATE ====================
+const MAX_MESSAGES = 200;
+let messageCount = 0;
+let isLoadingChat = false;
+let isLoadingTTS = false;
+let currentAudioBlob = null;
+
+// ==================== TAB SWITCHING ====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ==================== MODEL LOADING ====================
+async function loadModels() {
+  try {
+    const resp = await fetch('/api/models');
+    const data = await resp.json();
+    const chatSelect = document.getElementById('chatModelSelect');
+    const ttsSelect = document.getElementById('ttsModelSelect');
+
+    // Group by provider for chat (text models)
+    const chatGroups = {};
+    data.models.filter(m => m.type === 'text').forEach(m => {
+      if (!chatGroups[m.provider_name]) chatGroups[m.provider_name] = [];
+      chatGroups[m.provider_name].push(m);
+    });
+    for (const [providerName, models] of Object.entries(chatGroups)) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = providerName;
+      models.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.id;
+        option.textContent = `${m.tier === 'FREE' ? '🆓' : '💰'} ${m.name}`;
+        optgroup.appendChild(option);
+      });
+      chatSelect.appendChild(optgroup);
+    }
+    // Restore last chat model
+    const savedChat = localStorage.getItem('chatModel');
+    if (savedChat) chatSelect.value = savedChat;
+    chatSelect.addEventListener('change', () => localStorage.setItem('chatModel', chatSelect.value));
+
+    // TTS models
+    data.models.filter(m => m.type === 'tts').forEach(m => {
+      const option = document.createElement('option');
+      option.value = m.id;
+      option.textContent = `${m.desc}`;
+      ttsSelect.appendChild(option);
+    });
+    const savedTTS = localStorage.getItem('ttsModel');
+    if (savedTTS) ttsSelect.value = savedTTS;
+    ttsSelect.addEventListener('change', () => localStorage.setItem('ttsModel', ttsSelect.value));
+  } catch(e) {
+    console.error('Failed to load models:', e);
+  }
+}
+
+// ==================== CHAT FUNCTIONS ====================
+function addMessage(role, content, tokens = null) {
+  const container = document.getElementById('chatMessages');
+  if (messageCount === 0) container.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = `message ${role === 'user' ? 'user-msg' : 'ai-msg'}`;
+  let html = escapeHtml(content);
+  html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.3);padding:8px;border-radius:8px;overflow-x:auto;"><code>$2</code></pre>');
+  html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">$1</code>');
+  div.innerHTML = html;
+  if (tokens && role === 'ai') {
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.innerHTML = `<span>🤖 AI</span><span>📊 ${tokens.total_tokens || 0} tokens</span>`;
+    div.appendChild(meta);
+  } else if (role === 'user') {
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.innerHTML = '<span>👤 Bạn</span>';
+    div.appendChild(meta);
+  }
+  container.appendChild(div);
+  messageCount++;
+  while (container.children.length > MAX_MESSAGES) {
+    container.removeChild(container.firstChild);
+    messageCount--;
+  }
+  requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; });
+}
+
+function addLoading() {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'loading';
+  div.id = 'loadingIndicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeLoading() {
+  const el = document.getElementById('loadingIndicator');
+  if (el) el.remove();
+}
+
+function escapeHtml(text) {
+  const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'};
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+async function sendMessage() {
+  if (isLoadingChat) return;
+  const input = document.getElementById('userInput');
+  const message = input.value.trim();
+  if (!message) return;
+  const modelId = document.getElementById('chatModelSelect').value;
+  if (!modelId) { alert('Chọn model chat!'); return; }
+  input.value = '';
+  isLoadingChat = true;
+  document.getElementById('sendBtn').disabled = true;
+  addMessage('user', message);
+  addLoading();
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ model: modelId, message })
+    });
+    const data = await resp.json();
+    removeLoading();
+    if (data.error) addMessage('ai', '❌ ' + data.error);
+    else addMessage('ai', data.response, data.usage);
+  } catch(e) {
+    removeLoading();
+    addMessage('ai', '❌ Lỗi kết nối: ' + e.message);
+  }
+  isLoadingChat = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('userInput').focus();
+}
+
+document.getElementById('userInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+function clearChat() {
+  if (confirm('Xóa toàn bộ lịch sử chat?')) {
+    document.getElementById('chatMessages').innerHTML = '<div style="text-align:center;color:var(--text2);margin-top:40px;">🤖 Chọn model và bắt đầu chat</div>';
+    messageCount = 0;
+  }
+}
+
+// ==================== TTS FUNCTIONS ====================
+async function generateSpeech() {
+  if (isLoadingTTS) return;
+  const text = document.getElementById('ttsText').value.trim();
+  if (!text) { alert('Nhập văn bản cần đọc!'); return; }
+  const modelId = document.getElementById('ttsModelSelect').value;
+  if (!modelId) { alert('Chọn model TTS!'); return; }
+  isLoadingTTS = true;
+  const btn = document.getElementById('ttsGenerateBtn');
+  btn.textContent = '⏳ Đang tạo...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ model: modelId, text })
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert('Lỗi: ' + (err.error || 'Unknown'));
+      return;
+    }
+    const blob = await resp.blob();
+    currentAudioBlob = blob;
+    const audioUrl = URL.createObjectURL(blob);
+    const audioEl = document.getElementById('ttsAudio');
+    audioEl.src = audioUrl;
+    document.getElementById('ttsAudioContainer').style.display = 'block';
+    document.getElementById('ttsDownload').href = audioUrl;
+  } catch(e) {
+    alert('Lỗi kết nối: ' + e.message);
+  } finally {
+    isLoadingTTS = false;
+    btn.textContent = '🔊 Tạo giọng nói';
+    btn.disabled = false;
+  }
+}
+
+// ==================== STARTUP ====================
+loadModels();
+</script>
+</body>
+</html>
