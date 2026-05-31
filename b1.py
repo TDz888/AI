@@ -1,20 +1,28 @@
-import logging
-import requests
-import json
+#!/usr/bin/env python3
+"""
+🚀 ULTIMATE TELEGRAM AI AGENT BOT
+- Đa mô hình AI (hơn 50 model)
+- GitHub tích hợp: tạo repo, push file, tự động code
+- Text-to-Speech (TTS) gửi file MP3
+- Gửi file TXT nếu phản hồi quá dài
+- Quản lý hội thoại thông minh
+"""
+
+import logging, requests, json, io, base64, os, tempfile
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# ================= CONFIGURATION =================
-
-# 1. Telegram Bot Token
+# ═══════════════════════════════════════════════
+# CONFIG
+# ═══════════════════════════════════════════════
 TELEGRAM_BOT_TOKEN = "8909561772:AAGQgxrbvXbi-RACF4_Z7iiS4R7NA6Za6wU"
+AI_API_BASE = "https://ckey.vn/v1/chat/completions"
+AI_API_KEY = "sk-e317a237354192e26f99951f06e4882779e8a0e08e86d2f71242e8ff770bdf24"
+TTS_API = "https://ckey.vn/v1/audio/speech"
+GITHUB_TOKEN = "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"
+DEFAULT_MODEL = "🚀 GLM4.7"
+SYSTEM_PROMPT = "You are a helpful, intelligent AI assistant. Respond concisely."
 
-# 2. AI Provider Settings (Single Endpoint)
-API_BASE_URL = "https://ckey.vn/v1/chat/completions"
-API_KEY = "sk-e317a237354192e26f99951f06e4882779e8a0e08e86d2f71242e8ff770bdf24"
-
-# 3. Model List (From your data)
-# Format: "Display Name": "Model_ID_for_API"
 AVAILABLE_MODELS = {
     "💎 Gemini Embedding 2": "gemini-embedding-2-preview",
     "🚀 GLM4.7": "glm4.7",
@@ -55,201 +63,342 @@ AVAILABLE_MODELS = {
     "🤖 GPT-5.5 (W3leee)": "w3leee/GPT 5.5",
 }
 
-# Default Model to start with
-DEFAULT_MODEL_KEY = "🚀 GLM4.7" 
-
-# System Prompt
-SYSTEM_PROMPT = "You are a helpful, intelligent, and concise AI assistant."
-
-# =================================================
-
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# ═══════════════════════════════════════════════
+# LOGGING
+# ═══════════════════════════════════════════════
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Store user state: { chat_id: { 'history': [], 'current_model_key': '...' } }
+# ═══════════════════════════════════════════════
+# GITHUB CLIENT
+# ═══════════════════════════════════════════════
+class GitHubClient:
+    def __init__(self, token, owner=None, repo=None, branch="main"):
+        self.token = token
+        self.owner = owner
+        self.repo = repo
+        self.branch = branch
+        self.headers = {
+            "Authorization": f"token {self.token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+    def _base(self):
+        return f"https://api.github.com/repos/{self.owner}/{self.repo}"
+
+    def create_repo(self, name, private=False):
+        url = "https://api.github.com/user/repos"
+        payload = {"name": name, "private": private, "auto_init": True}
+        resp = requests.post(url, headers=self.headers, json=payload)
+        if resp.status_code == 201:
+            self.owner = resp.json()["owner"]["login"]
+            self.repo = name
+            return True, f"Đã tạo repo {name} (owner: {self.owner})"
+        return False, resp.json()
+
+    def push(self, path, content, msg="Auto-commit by Telegram Bot"):
+        url = f"{self._base()}/contents/{path}"
+        sha = self._get_sha(path)
+        payload = {"message": msg, "content": base64.b64encode(content.encode()).decode(), "branch": self.branch}
+        if sha: payload["sha"] = sha
+        resp = requests.put(url, headers=self.headers, json=payload)
+        if resp.status_code in (200, 201):
+            return True, resp.json()["content"]["html_url"]
+        return False, resp.json()
+
+    def get(self, path):
+        url = f"{self._base()}/contents/{path}?ref={self.branch}"
+        resp = requests.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            return True, base64.b64decode(resp.json()["content"]).decode()
+        return False, resp.json()
+
+    def list(self, path=""):
+        url = f"{self._base()}/contents/{path}?ref={self.branch}"
+        resp = requests.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            return True, [f["name"] for f in resp.json()]
+        return False, resp.json()
+
+    def delete(self, path, msg="Deleted by Telegram Bot"):
+        url = f"{self._base()}/contents/{path}"
+        sha = self._get_sha(path)
+        if not sha: return False, "File không tồn tại"
+        payload = {"message": msg, "sha": sha, "branch": self.branch}
+        resp = requests.delete(url, headers=self.headers, json=payload)
+        return (True, "Đã xóa") if resp.status_code == 200 else (False, resp.json())
+
+    def _get_sha(self, path):
+        url = f"{self._base()}/contents/{path}?ref={self.branch}"
+        resp = requests.get(url, headers=self.headers)
+        return resp.json()["sha"] if resp.status_code == 200 else None
+
+# ═══════════════════════════════════════════════
+# USER STATE MANAGEMENT
+# ═══════════════════════════════════════════════
 user_states = {}
 
-def get_user_state(user_id):
+def get_state(user_id):
     if user_id not in user_states:
         user_states[user_id] = {
             'history': [],
-            'current_model_key': DEFAULT_MODEL_KEY
+            'model': DEFAULT_MODEL,
+            'gh_owner': None,
+            'gh_repo': None,
+            'last_message': None
         }
     return user_states[user_id]
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    state = get_user_state(update.effective_user.id)
-    current_model_name = state['current_model_key']
-    
-    welcome_msg = (
-        f"👋 *Welcome to FizzPop AI Bot!*\n\n"
-        f"I am connected to multiple high-end AI models.\n"
-        f"Currently using: *{current_model_name}*\n\n"
-        f"📂 Use /models to see the full list.\n"
-        f"🔄 Use /switch <number> to change model.\n"
-        f"🗑 Use /reset to clear chat history."
-    )
-    await update.message.reply_text(welcome_msg, parse_mode='Markdown')
-
-async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lists all available models with numbers."""
-    model_keys = list(AVAILABLE_MODELS.keys())
-    state = get_user_state(update.effective_user.id)
-    current_key = state['current_model_key']
-    
-    message = "📂 *Available AI Models*\n________________________\n"
-    
-    for index, key in enumerate(model_keys, 1):
-        # Mark current model
-        marker = "✅" if key == current_key else "⚪"
-        # Truncate long names for cleaner display if needed, but keeping full for now
-        message += f"*{index}.* {marker} {key}\n"
-        
-    message += "\n👉 *Reply with:* `/switch <number>`\n(e.g., `/switch 2` to use GLM4.7)"
-    
-    await update.message.reply_text(message, parse_mode='Markdown')
-
-async def switch_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Switches the active model based on user input number."""
-    if not context.args:
-        await update.message.reply_text("❌ *Error:* Please provide a number.\nExample: `/switch 1`", parse_mode='Markdown')
-        return
-    
+# ═══════════════════════════════════════════════
+# HELPER: GỌI API CHAT
+# ═══════════════════════════════════════════════
+def call_ai(model_id, messages, max_tokens=2048):
+    headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": model_id, "messages": messages, "temperature": 0.7, "max_tokens": max_tokens, "stream": False}
     try:
-        choice = int(context.args[0])
-        model_keys = list(AVAILABLE_MODELS.keys())
-        
-        if 1 <= choice <= len(model_keys):
-            selected_key = model_keys[choice - 1]
-            state = get_user_state(update.effective_user.id)
-            state['current_model_key'] = selected_key
-            
-            # Optional: Clear history when switching to avoid context confusion between different model architectures
-            # state['history'] = [] 
-            
-            await update.message.reply_text(f"✅ *Success!* Switched to:\n*{selected_key}*", parse_mode='Markdown')
+        resp = requests.post(AI_API_BASE, headers=headers, json=payload, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0]["message"]["content"]
+        return None
+    except Exception as e:
+        logger.error(f"API error: {e}")
+        raise
+
+# ═══════════════════════════════════════════════
+# HELPER: GỬI TIN NHẮN DÀI
+# ═══════════════════════════════════════════════
+async def send_long_message(update, text, parse_mode='Markdown'):
+    if len(text) <= 4000:
+        await update.message.reply_text(text, parse_mode=parse_mode)
+    else:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.write(text)
+            filepath = f.name
+        await update.message.reply_document(document=open(filepath, 'rb'), filename="response.txt")
+        os.unlink(filepath)
+
+# ═══════════════════════════════════════════════
+# COMMAND HANDLERS
+# ═══════════════════════════════════════════════
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = get_state(update.effective_user.id)
+    await update.message.reply_text(
+        f"🤖 *Ultimate AI Agent Bot*\n"
+        f"Model: *{state['model']}*\n\n"
+        f"📂 /models - Danh sách model\n"
+        f"🔄 /switch <số> - Đổi model\n"
+        f"🗑 /reset - Xóa lịch sử\n"
+        f"🔊 /tts <text> - Chuyển văn bản thành giọng nói\n"
+        f"🐙 /git help - Các lệnh GitHub\n"
+        f"💬 Nhắn tin trực tiếp để chat!",
+        parse_mode='Markdown'
+    )
+
+async def models_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = get_state(update.effective_user.id)
+    keys = list(AVAILABLE_MODELS.keys())
+    msg = "📂 *Danh sách Model*\n"
+    for i, k in enumerate(keys, 1):
+        marker = "✅" if k == state['model'] else "⚪"
+        msg += f"*{i}.* {marker} {k}\n"
+    msg += "\n👉 `/switch <số>` để đổi model"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ Dùng: `/switch <số>`", parse_mode='Markdown')
+        return
+    try:
+        idx = int(context.args[0])
+        keys = list(AVAILABLE_MODELS.keys())
+        if 1 <= idx <= len(keys):
+            state = get_state(update.effective_user.id)
+            state['model'] = keys[idx-1]
+            await update.message.reply_text(f"✅ Đã chọn: *{keys[idx-1]}*", parse_mode='Markdown')
         else:
-            await update.message.reply_text(f"❌ *Error:* Number out of range. Choose between 1 and {len(model_keys)}.", parse_mode='Markdown')
-            
+            await update.message.reply_text(f"❌ Số từ 1 đến {len(keys)}", parse_mode='Markdown')
     except ValueError:
-        await update.message.reply_text("❌ *Error:* Please enter a valid number.", parse_mode='Markdown')
+        await update.message.reply_text("❌ Số không hợp lệ", parse_mode='Markdown')
 
-async def reset_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Clears chat history."""
-    user_id = update.effective_user.id
-    if user_id in user_states:
-        user_states[user_id]['history'] = []
-    await update.message.reply_text("🗑 *Chat history cleared.*", parse_mode='Markdown')
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = get_state(update.effective_user.id)
+    state['history'] = []
+    await update.message.reply_text("🗑 Đã xóa lịch sử chat.")
 
+async def tts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = get_state(update.effective_user.id)
+    text = ' '.join(context.args) if context.args else state.get('last_message')
+    if not text:
+        await update.message.reply_text("❌ Cần văn bản. Dùng: `/tts <text>` hoặc chat trước.", parse_mode='Markdown')
+        return
+    await context.bot.send_chat_action(update.effective_chat.id, "record_voice")
+    try:
+        headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
+        payload = {"model": "vi-VN-NamMinhNeural", "input": text, "voice": "NamMinh"}
+        resp = requests.post(TTS_API, headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        audio = io.BytesIO(resp.content)
+        audio.name = "speech.mp3"
+        await update.message.reply_voice(audio)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Lỗi TTS: {e}")
+
+# ═══════════════════════════════════════════════
+# GITHUB COMMANDS
+# ═══════════════════════════════════════════════
+async def git_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "🐙 *GitHub Commands:*\n"
+            "/git config <owner> <repo> - Thiết lập repo\n"
+            "/git create <tên> - Tạo repo mới\n"
+            "/git push <path> <nội dung> - Push file\n"
+            "/git list - Danh sách file\n"
+            "/git get <path> - Xem file\n"
+            "/git delete <path> - Xóa file\n"
+            "/git auto <yêu cầu> - AI tự code và push",
+            parse_mode='Markdown'
+        )
+        return
+    state = get_state(update.effective_user.id)
+    gh = GitHubClient(GITHUB_TOKEN, state.get('gh_owner'), state.get('gh_repo'))
+    action = context.args[0].lower()
+    if action == 'config':
+        if len(context.args) >= 3:
+            state['gh_owner'] = context.args[1]
+            state['gh_repo'] = context.args[2]
+            await update.message.reply_text(f"✅ Đã lưu GitHub: {state['gh_owner']}/{state['gh_repo']}")
+        else:
+            await update.message.reply_text("❌ Dùng: /git config <owner> <repo>")
+    elif action == 'create':
+        if len(context.args) >= 2:
+            name = context.args[1]
+            ok, msg = gh.create_repo(name)
+            if ok:
+                state['gh_owner'] = gh.owner
+                state['gh_repo'] = gh.repo
+                await update.message.reply_text(f"✅ {msg}")
+            else:
+                await update.message.reply_text(f"❌ {msg}")
+        else:
+            await update.message.reply_text("❌ Dùng: /git create <tên>")
+    elif action in ('push', 'get', 'delete', 'list'):
+        if not state.get('gh_owner') or not state.get('gh_repo'):
+            await update.message.reply_text("❌ Chưa cấu hình GitHub. Dùng: /git config <owner> <repo>")
+            return
+        if action == 'push':
+            if len(context.args) >= 3:
+                path = context.args[1]
+                content = ' '.join(context.args[2:])
+                ok, msg = gh.push(path, content)
+                await update.message.reply_text(f"{'✅' if ok else '❌'} {msg}" if ok else f"❌ {msg}")
+            else:
+                await update.message.reply_text("❌ Dùng: /git push <path> <nội dung>")
+        elif action == 'list':
+            ok, files = gh.list()
+            if ok:
+                await update.message.reply_text("📁 " + "\n".join(files) if files else "Repo trống")
+            else:
+                await update.message.reply_text(f"❌ {files}")
+        elif action == 'get':
+            if len(context.args) >= 2:
+                ok, content = gh.get(context.args[1])
+                if ok:
+                    await send_long_message(update, f"📄 *{context.args[1]}*\n```\n{content}\n```")
+                else:
+                    await update.message.reply_text(f"❌ {content}")
+            else:
+                await update.message.reply_text("❌ Dùng: /git get <path>")
+        elif action == 'delete':
+            if len(context.args) >= 2:
+                ok, msg = gh.delete(context.args[1])
+                await update.message.reply_text(f"{'✅' if ok else '❌'} {msg}")
+            else:
+                await update.message.reply_text("❌ Dùng: /git delete <path>")
+    elif action == 'auto':
+        if not state.get('gh_owner') or not state.get('gh_repo'):
+            await update.message.reply_text("❌ Chưa cấu hình GitHub.")
+            return
+        task = ' '.join(context.args[1:])
+        if not task:
+            await update.message.reply_text("❌ Mô tả yêu cầu: /git auto <yêu cầu>")
+            return
+        await context.bot.send_chat_action(update.effective_chat.id, "typing")
+        try:
+            # Gọi AI để sinh code
+            msgs = [
+                {"role": "system", "content": "You are a coding assistant. Generate code based on the user's request. Wrap code in ```language ... ``` blocks. Keep it short and functional."},
+                {"role": "user", "content": task}
+            ]
+            ai_resp = call_ai(AVAILABLE_MODELS[state['model']], msgs, max_tokens=1024)
+            if ai_resp:
+                # Tìm block code
+                import re
+                code_blocks = re.findall(r'```(?:\w+)?\n(.*?)```', ai_resp, re.DOTALL)
+                if code_blocks:
+                    code = code_blocks[0]
+                    path = f"auto_{int(time.time())}.py"  # Tự đặt tên
+                    ok, msg = gh.push(path, code, f"Auto-generated: {task}")
+                    if ok:
+                        await update.message.reply_text(f"✅ Đã push `{path}`: {msg}", parse_mode='Markdown')
+                    else:
+                        await update.message.reply_text(f"❌ Push lỗi: {msg}")
+                else:
+                    await update.message.reply_text("❌ AI không tạo code block.")
+            else:
+                await update.message.reply_text("❌ AI không phản hồi.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Lỗi: {e}")
+    else:
+        await update.message.reply_text("❓ Lệnh không rõ. /git help")
+
+# ═══════════════════════════════════════════════
+# HANDLE MESSAGE
+# ═══════════════════════════════════════════════
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-
     user_id = update.effective_user.id
-    user_input = update.message.text
-    state = get_user_state(user_id)
-    
-    # Get Model ID from the selected Key
-    model_key = state['current_model_key']
-    if model_key not in AVAILABLE_MODELS:
-        # Fallback if key is missing
-        model_key = DEFAULT_MODEL_KEY
-        state['current_model_key'] = DEFAULT_MODEL_KEY
-        
-    model_id = AVAILABLE_MODELS[model_key]
-    
-    # Show typing action
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    text = update.message.text
+    state = get_state(user_id)
+    state['last_message'] = text
+    model_id = AVAILABLE_MODELS.get(state['model'], AVAILABLE_MODELS[DEFAULT_MODEL])
 
-    # Manage History (Keep last 10 messages to save tokens)
-    state['history'].append({"role": "user", "content": user_input})
-    if len(state['history']) > 10:
-        state['history'] = state['history'][-10:]
+    await context.bot.send_chat_action(update.effective_chat.id, "typing")
 
-    # Prepare Payload
-    messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}] + state['history']
+    # Lưu vào history
+    state['history'].append({"role": "user", "content": text})
+    if len(state['history']) > 20:
+        state['history'] = state['history'][-20:]
 
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + state['history']
     try:
-        # Call API
-        ai_response = call_ai_api(model_id, messages_payload)
-        
+        ai_response = call_ai(model_id, messages)
         if ai_response:
-            # Append AI response to history
             state['history'].append({"role": "assistant", "content": ai_response})
-            
-            # Format and Send Response
-            formatted_response = f"🤖 *{model_key}*\n________________________\n{ai_response}"
-            await send_long_message(update, formatted_response)
+            await send_long_message(update, f"🤖 *{state['model']}*\n{ai_response}")
         else:
-            await update.message.reply_text("❌ *Error:* No response from AI.", parse_mode='Markdown')
-
+            await update.message.reply_text("❌ Không nhận được phản hồi.")
     except Exception as e:
-        logger.error(f"Error: {e}")
-        await update.message.reply_text(f"⚠️ *API Error:* {str(e)}", parse_mode='Markdown')
+        await update.message.reply_text(f"⚠️ Lỗi: {e}")
 
-def call_ai_api(model_id, messages):
-    """Sends request to the configured AI API endpoint."""
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}"
-    }
+# ═══════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('models', models_cmd))
+    app.add_handler(CommandHandler('switch', switch))
+    app.add_handler(CommandHandler('reset', reset))
+    app.add_handler(CommandHandler('tts', tts_cmd))
+    app.add_handler(CommandHandler('git', git_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    logger.info("🚀 Bot đang chạy...")
+    app.run_polling(drop_pending_updates=True)
 
-    data = {
-        "model": model_id,
-        "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": 2048
-    }
-
-    try:
-        response = requests.post(API_BASE_URL, headers=headers, json=data, timeout=60)
-        response.raise_for_status()  # Raise exception for bad status codes
-        
-        result = response.json()
-        
-        # Extract content
-        if 'choices' in result and len(result['choices']) > 0:
-            return result['choices'][0]['message']['content']
-        else:
-            logger.error(f"Unexpected API response: {result}")
-            return None
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request failed: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"API Error Detail: {e.response.text}")
-        raise e
-
-async def send_long_message(update, text):
-    """Telegram has a limit of 4096 chars per message. This splits long texts."""
-    max_len = 4000
-    if len(text) <= max_len:
-        await update.message.reply_text(text, parse_mode='Markdown')
-    else:
-        chunks = [text[i:i+max_len] for i in range(0, len(text), max_len)]
-        for chunk in chunks:
-            await update.message.reply_text(chunk, parse_mode='Markdown')
-
-if __name__ == '__main__':
-    logger.info("Bot is starting...")
-    
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-    # Handlers
-    start_handler = CommandHandler('start', start)
-    models_handler = CommandHandler('models', show_models)
-    switch_handler = CommandHandler('switch', switch_model)
-    reset_handler = CommandHandler('reset', reset_chat)
-    message_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
-
-    application.add_handler(start_handler)
-    application.add_handler(models_handler)
-    application.add_handler(switch_handler)
-    application.add_handler(reset_handler)
-    application.add_handler(message_handler)
-
-    application.run_polling(drop_pending_updates=True)
+if __name__ == "__main__":
+    main()
